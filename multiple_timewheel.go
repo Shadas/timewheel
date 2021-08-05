@@ -24,12 +24,12 @@ const (
 	tvnSize = 1 << tvnBits
 )
 
-var multipleLevelMaskMap = map[MultipleLevel]int{
+var multipleLevelSize = map[MultipleLevel]int{
 	MultipleLevel1: tvrSize,
-	MultipleLevel2: tvrSize << tvnBits,
-	MultipleLevel3: tvrSize << tvnBits << tvnBits,
-	MultipleLevel4: tvrSize << tvnBits << tvnBits << tvnBits,
-	MultipleLevel5: tvrSize << tvnBits << tvnBits << tvnBits << tvnBits,
+	MultipleLevel2: tvnSize,
+	MultipleLevel3: tvnSize,
+	MultipleLevel4: tvnSize,
+	MultipleLevel5: tvnSize,
 }
 
 // 多层时间轮，按照输入slotNum决定层数
@@ -140,14 +140,8 @@ func (tw *MultipleTimeWheel) CurPos() (pos []int) {
 
 func (tw *MultipleTimeWheel) appendPos(offset int) (pos []int, circle int) {
 	circle = offset / tw.slotNum // 总圈数=移动格数/一圈总格数
-	curPos := tw.CurPos()
-	add := 0
-	pos = make([]int, tw.level)
-	for i := 0; i < int(tw.level); i++ {
-		tp := (curPos[i] + offset + add) % multipleLevelMaskMap[tw.level]
-		add = (curPos[i] + offset + add) / multipleLevelMaskMap[tw.level]
-		pos[i] = tp
-	}
+	last := offset % tw.slotNum
+	pos = posAddOffset(tw.CurPos(), last)
 	return
 }
 
