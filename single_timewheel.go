@@ -6,42 +6,39 @@ import (
 	"time"
 )
 
-const (
-	SingleLevelSlotNum = 1 << 8
-)
-
 type Task struct {
 	delay time.Duration
 	f     func()
 	key   interface{} // 用于删除定时任务
 
-	circle int64
+	circle int
 }
 
 // 单层时间轮
 type SingleTimeWheel struct {
-	BaseTimeWheel
+	baseTimeWheel
 	totalDuration time.Duration
-	slots         []*list.List // 单层时间轮的槽位
-	currPos       int64
+	timerVec      // 对应定时器载体
 
-	keySlot map[interface{}]int64 // 记录key-slot位置，用于删除
+	keySlot map[interface{}]int // 记录key-slot位置，用于删除
 }
 
-func NewSingleTimeWheel(interval time.Duration, slotNum int64) *SingleTimeWheel {
+func NewSingleTimeWheel(interval time.Duration, slotNum int) *SingleTimeWheel {
 	tw := &SingleTimeWheel{
-		BaseTimeWheel: BaseTimeWheel{
+		baseTimeWheel: baseTimeWheel{
 			interval:    interval,
 			slotNum:     slotNum,
 			shutdown:    make(chan struct{}),
 			addTaskChan: make(chan *Task),
 			rmTaskChan:  make(chan interface{}),
 		},
-		slots:         make([]*list.List, slotNum),
+		timerVec: timerVec{
+			slots: make([]*list.List, slotNum),
+		},
 		totalDuration: time.Duration(int64(interval) * int64(slotNum)),
-		keySlot:       make(map[interface{}]int64),
+		keySlot:       make(map[interface{}]int),
 	}
-	for i := 0; int64(i) < tw.slotNum; i++ {
+	for i := 0; i < tw.slotNum; i++ {
 		tw.slots[i] = list.New()
 	}
 	return tw
@@ -118,22 +115,22 @@ func (tw *SingleTimeWheel) addTask(task *Task) {
 	}
 }
 
-func (tw *SingleTimeWheel) parseIdxAndCircle(task *Task) (idx int64) {
-	task.circle = int64(task.delay / tw.totalDuration)
-	offset := int64(task.delay/tw.interval) % tw.slotNum
-	idx = (tw.currPos + offset) % tw.slotNum
+func (tw *SingleTimeWheel) parseIdxAndCircle(task *Task) (idx int) {
+	task.circle = int(task.delay / tw.totalDuration)
+	offset := int(task.delay/tw.interval) % tw.slotNum
+	idx = (tw.idx + offset) % tw.slotNum
 	fmt.Printf("circle=%d, offset=%d, idx=%d\n", task.circle, offset, idx)
 	return
 }
 
 func (tw *SingleTimeWheel) processTick() {
-	fmt.Printf("currPos=%d\n", tw.currPos)
-	l := tw.slots[tw.currPos]
+	fmt.Printf("currPos=%d\n", tw.idx)
+	l := tw.slots[tw.idx]
 	tw.processList(l)
-	if tw.currPos == tw.slotNum-1 {
-		tw.currPos = 0
+	if tw.idx == tw.slotNum-1 {
+		tw.idx = 0
 	} else {
-		tw.currPos += 1
+		tw.idx += 1
 	}
 }
 
@@ -151,11 +148,4 @@ func (tw *SingleTimeWheel) processList(l *list.List) {
 		l.Remove(node)
 		node = next
 	}
-}
-
-// 时间轮终止
-func (tw *SingleTimeWheel) ShutDown() {
-	close(tw.shutdown)
-	close(tw.addTaskChan)
-	close(tw.rmTaskChan)
 }
