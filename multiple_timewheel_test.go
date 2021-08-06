@@ -38,6 +38,12 @@ func TestPosAddOffset(t *testing.T) {
 	if pos := posAddOffset([]int{200, 63, 5}, 1024); !isPosEqual(pos, []int{200, 3, 6}) {
 		t.Errorf("pos is not [200,3,6], it's %v", pos)
 	}
+	if pos := posAddOffset([]int{200, 63, 5}, -1); !isPosEqual(pos, []int{199, 63, 5}) {
+		t.Errorf("pos is not [199,63,5], it's %v", pos)
+	}
+	if pos := posAddOffset([]int{0, 63, 5}, -1); !isPosEqual(pos, []int{255, 62, 5}) {
+		t.Errorf("pos is not [255,62,5], it's %v", pos)
+	}
 }
 
 func TestAppendPos(t *testing.T) {
