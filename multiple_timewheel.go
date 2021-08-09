@@ -32,6 +32,14 @@ var multipleLevelSize = map[MultipleLevel]int{
 	MultipleLevel5: tvnSize,
 }
 
+var multipleLevelBase = map[MultipleLevel]int{
+	MultipleLevel1: 1,
+	MultipleLevel2: 1 << tvrBits,
+	MultipleLevel3: 1 << tvrBits << tvnBits,
+	MultipleLevel4: 1 << tvrBits << tvnBits << tvnBits,
+	MultipleLevel5: 1 << tvrBits << tvnBits << tvnBits << tvnBits,
+}
+
 // 多层时间轮，按照输入slotNum决定层数
 type MultipleTimeWheel struct {
 	baseTimeWheel
@@ -122,11 +130,13 @@ func (tw *MultipleTimeWheel) SetCurPos(pos []int) {
 }
 
 type MTask struct {
-	pos    []int
-	delay  time.Duration
-	f      func()
-	key    interface{}
-	circle int
+	pos   []int
+	delay time.Duration
+	f     func()
+	key   interface{}
+
+	circle  int
+	initPos []int // 用于支持判断circle何时应该-1
 }
 
 // 获取当前时间指针位置
@@ -145,6 +155,7 @@ func (tw *MultipleTimeWheel) appendPos(offset int) (pos []int, circle int) {
 	return
 }
 
+// 增加定时任务
 func (tw *MultipleTimeWheel) AddTimerTask(delay time.Duration, f func(), key interface{}) {
 	if delay < 0 {
 		return
@@ -161,11 +172,49 @@ func (tw *MultipleTimeWheel) addTask(task *MTask) {
 	fmt.Printf("add Task, task=%+v\n", *task)
 	offset := int(task.delay / tw.interval)
 	task.pos, task.circle = tw.appendPos(offset)
-	tw.placeTask(task) // 挂载链表
+	task.initPos = posAddOffset(tw.CurPos(), -1) // 注册位置标记为上一个ticker的pos
+	tw.placeTask(task)                           // 挂载链表
 }
 
+// 挂载任务，最开始的任务挂载到最外层时间轮，后续根据ticker触发向内层转移
 func (tw *MultipleTimeWheel) placeTask(task *MTask) {
 	high := task.pos[tw.level-1]
 	l := tw.wheels[tw.level-1].slots[high]
 	l.PushBack(task)
+}
+
+// 定时触发逻辑(not finish)
+func (tw *MultipleTimeWheel) processTick() {
+	fmt.Printf("currPos=%d\n", tw.CurPos())
+	curPos := tw.CurPos()
+	// 先执行最内圈任务
+	l := tw.wheels[0].slots[curPos[0]]
+	tw.processList(l)
+	// 高层时间轮向内转移
+	if tw.level > 1 {
+		for i := 1; i < int(tw.level); i++ {
+			if i == int(tw.level)-1 { // 如果是最高轮，需要关注circle
+				//l := tw.pickMovingTasks() // 获取d
+			} else {
+
+			}
+		}
+	}
+
+}
+
+func (tw *MultipleTimeWheel) processList(l *list.List) {
+	for node := l.Front(); node != nil; {
+		task := node.Value.(*Task)
+		fmt.Println("curr_circle=", task.circle)
+		if task.circle > 0 {
+			task.circle -= 1
+			node = node.Next()
+			continue
+		}
+		go task.f()
+		next := node.Next()
+		l.Remove(node)
+		node = next
+	}
 }

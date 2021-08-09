@@ -1,6 +1,7 @@
 package timewheel
 
 import (
+	"container/list"
 	"testing"
 	"time"
 )
@@ -56,5 +57,30 @@ func TestAppendPos(t *testing.T) {
 	if circle != 0 {
 		t.Error("circle should be 0")
 	}
+}
 
+func TestPickMovingTasks(t *testing.T) {
+	oldList := list.New()
+	oldList.PushBack(&MTask{
+		circle:  2,
+		initPos: []int{6, 1, 2},
+		key:     "1",
+	})
+	oldList.PushBack(&MTask{
+		circle:  0,
+		initPos: []int{6, 1, 2},
+		key:     "2",
+	})
+	b, newList := pickMovingTasks(oldList, []int{6, 1, 2})
+	if !b {
+		t.Error("b should be true")
+	}
+	for node := oldList.Front(); node != nil; node = node.Next() {
+		task := node.Value.(*MTask)
+		t.Log(*task)
+	}
+	for node := newList.Front(); node != nil; node = node.Next() {
+		task := node.Value.(*MTask)
+		t.Log(*task)
+	}
 }
